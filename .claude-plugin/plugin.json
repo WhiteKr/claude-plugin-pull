@@ -1,0 +1,11 @@
+{
+  "name": "pull",
+  "version": "0.1.0",
+  "description": "Bulk git pull across every repo under the working directory plus external workspaces from settings — parallel fetch, rebase-pull of outdated repos, and submodule update reporting",
+  "author": {
+    "name": "WhiteKr",
+    "email": "white_kr@icloud.com"
+  },
+  "license": "MIT",
+  "keywords": ["git", "pull", "rebase", "submodule", "monorepo", "workspace"]
+}
