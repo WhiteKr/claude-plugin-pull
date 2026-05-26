@@ -178,18 +178,28 @@ for REPO in "${REPOS[@]}"; do
   fi
 
   # Submodule check (if applicable). foreach 본문은 sh 로 실행되므로 bash 함수를 못 쓴다.
-  # timeout 명령이 있으면 prefix 로 주입하고, 없으면 prefix 없이 그냥 fetch 한다.
+  # 2단 방어: (1) timeout 명령이 있으면 per-submodule prefix(TPREFIX)로 각 fetch 를 제한,
+  # (2) 전체 foreach 를 run_with_timeout 으로 한 번 더 감싸 timeout 명령이 없는 시스템
+  # (coreutils 미설치 macOS 등)에서도 무한 대기를 막는다. 둘 다 빠지면 submodule 원격이
+  # 응답 없을 때 git fetch 가 무한정 매달려 전체 wait 를 블록할 수 있었다.
   if [ -f "$REPO/.gitmodules" ]; then
     TPREFIX="${TIMEOUT_CMD:+$TIMEOUT_CMD $FETCH_TIMEOUT }"
-    SUB_OUT=$(git -C "$REPO" submodule foreach --quiet "$TPREFIX"'git fetch --all --quiet 2>/dev/null
+    # 출력은 `$()` 캡처가 아니라 파일로 리다이렉트한다. `$()` 는 파이프 write end 를 쥔
+    # 모든 프로세스가 끝나야 반환하는데, 타임아웃으로 foreach 를 죽여도 orphan 이 된
+    # git fetch/네트워크 헬퍼가 파이프를 계속 쥐고 있으면 `$()` 가 그만큼 블록된다.
+    # 파일 리다이렉트면 run_with_timeout 의 wait 가 직접 자식(foreach)만 기다려 즉시 반환하고,
+    # orphan 이 파일에 늦게 쓰든 말든 우리는 이미 읽은 뒤라 무관하다.
+    # 파일명은 `.txt` 가 아니어야 최종 `cat "$WORKDIR"/*.txt` glob 에 안 걸린다.
+    SUB_TMP="$WORKDIR/sub_$SAFE_NAME"
+    run_with_timeout "$((FETCH_TIMEOUT * 4))" git -C "$REPO" submodule foreach --quiet "$TPREFIX"'git fetch --all --quiet 2>/dev/null
       UPDATES=$(git log --oneline HEAD..@{upstream} 2>/dev/null)
       if [ -n "$UPDATES" ]; then
         echo "SUBMODULE:$displaypath"
         echo "$UPDATES"
-      fi' 2>/dev/null || echo "")
-    if [ -n "$SUB_OUT" ]; then
+      fi' > "$SUB_TMP" 2>/dev/null || true
+    if [ -s "$SUB_TMP" ]; then
       echo "SUBMODULE_START" >> "$OUT"
-      echo "$SUB_OUT" >> "$OUT"
+      cat "$SUB_TMP" >> "$OUT"
       echo "SUBMODULE_END" >> "$OUT"
     fi
   fi
