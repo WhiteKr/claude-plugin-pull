@@ -2,6 +2,13 @@
 
 작업 디렉토리(`$CWD`) 하위의 모든 git 레포와 settings의 `additionalDirectories`에 등록된 외부 워크스페이스를 찾아, outdated된 레포만 골라 병렬로 `git pull --rebase` 합니다.
 
+## 설치
+
+```
+/plugin marketplace add WhiteKr/whitekr-claude-plugins
+/plugin install pull@whitekr-claude-plugins
+```
+
 ## 사용
 
 ```
