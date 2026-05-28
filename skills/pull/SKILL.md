@@ -1,7 +1,6 @@
 ---
 name: pull
 description: "CWD 하위 모든 git 레포 + settings의 additionalDirectories 외부 워크스페이스까지 포함하여 git pull + submodule update. /pull 또는 /pull <이름> 으로 특정 레포만 대상 지정 가능."
-user_invocable: true
 model: sonnet
 effort: low
 ---

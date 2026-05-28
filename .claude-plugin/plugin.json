@@ -7,5 +7,10 @@
     "email": "white_kr@icloud.com"
   },
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/WhiteKr/whitekr-claude-plugins.git",
+    "directory": "plugins/pull"
+  },
   "keywords": ["git", "pull", "rebase", "submodule", "monorepo", "workspace"]
 }
