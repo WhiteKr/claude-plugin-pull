@@ -1,6 +1,6 @@
 {
   "name": "pull",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Bulk git pull across every repo under the working directory plus external workspaces from settings — parallel fetch, rebase-pull of outdated repos, and submodule update reporting",
   "author": {
     "name": "WhiteKr",
