@@ -96,7 +96,7 @@ for REPO in "${REPOS[@]}"; do
   # Unpushed commits (상세)
   UNPUSHED=""
   if [ "$AHEAD" != "0" ] && [ "$AHEAD" != "-" ]; then
-    UNPUSHED=$(git -C "$REPO" log --oneline @{upstream}..HEAD 2>/dev/null || echo "")
+    UNPUSHED=$(git -C "$REPO" log --format="%h %s (%an · %cr)" @{upstream}..HEAD 2>/dev/null || echo "")
   fi
 
   # Classify — DIRTY는 더 이상 사전 분류하지 않는다. 리포트 상태는 pull 결과에 의해 결정됨.
@@ -156,7 +156,7 @@ for REPO in "${REPOS[@]}"; do
         echo "UPDATED:yes"
         # 업스트림 기준으로 순수 원격 변경만 리포트 (로컬 rebase된 커밋 제외)
         echo "NEW_COMMITS_START"
-        git -C "$REPO" log --format="%h %s (%an)" "$BEFORE".."$UPSTREAM_SHA" 2>/dev/null || true
+        git -C "$REPO" log --format="%h %s (%an · %cr)" "$BEFORE".."$UPSTREAM_SHA" 2>/dev/null || true
         echo "NEW_COMMITS_END"
         echo "DIFF_STAT_START"
         git -C "$REPO" diff --stat "$BEFORE".."$UPSTREAM_SHA" 2>/dev/null || true
@@ -192,7 +192,7 @@ for REPO in "${REPOS[@]}"; do
     # 파일명은 `.txt` 가 아니어야 최종 `cat "$WORKDIR"/*.txt` glob 에 안 걸린다.
     SUB_TMP="$WORKDIR/sub_$SAFE_NAME"
     run_with_timeout "$((FETCH_TIMEOUT * 4))" git -C "$REPO" submodule foreach --quiet "$TPREFIX"'git fetch --all --quiet 2>/dev/null
-      UPDATES=$(git log --oneline HEAD..@{upstream} 2>/dev/null)
+      UPDATES=$(git log --format="%h %s (%an · %cr)" HEAD..@{upstream} 2>/dev/null)
       if [ -n "$UPDATES" ]; then
         echo "SUBMODULE:$displaypath"
         echo "$UPDATES"
