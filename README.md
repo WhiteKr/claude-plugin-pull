@@ -12,8 +12,9 @@
 ## 사용
 
 ```
-/pull            # 전체 대상
-/pull BE.Main    # 인자를 포함하는 레포만
+/pull                       # 전체 대상
+/pull api-server            # 특정 레포 이름
+/pull backend 폴더 아래 저장소   # 자연어로 대상 지정
 ```
 
 ## 동작
