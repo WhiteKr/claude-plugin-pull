@@ -10,7 +10,8 @@ set -u
 [ "$#" -eq 0 ] && { echo "no repos"; exit 0; }
 
 FETCH_TIMEOUT=30
-WORKDIR=$(mktemp -d "${TMPDIR:-/tmp}/pull-triage.XXXXXX")
+WORKDIR=$(mktemp -d "${TMPDIR:-/tmp}/pull-triage.XXXXXX") || { echo "error: mktemp -d 실패"; exit 1; }
+[ -n "$WORKDIR" ] && [ -d "$WORKDIR" ] || { echo "error: 임시 디렉토리 생성 실패"; exit 1; }
 
 # --- 환경 탐지: timeout 명령 (GNU coreutils) -------------------------------
 # Linux 는 보통 `timeout`, macOS(coreutils 설치 시)는 `gtimeout`. 둘 다 없으면
@@ -37,11 +38,15 @@ run_with_timeout() {
   _watcher_pid=$!
   _rc=0
   wait "$_cmd_pid" 2>/dev/null || _rc=$?
-  # 명령이 끝났으니 watcher 를 정리(이미 죽었으면 무해)하고 회수한다.
-  kill -TERM "$_watcher_pid" 2>/dev/null
-  wait "$_watcher_pid" 2>/dev/null || true
-  # 명령이 watcher 의 SIGTERM 에 죽었으면 wait 가 143(128+15)을 돌려준다 => 타임아웃(124)으로 정규화.
-  [ "$_rc" -eq 143 ] && _rc=124
+  # watcher 가 아직 살아있으면(sleep 중) 명령이 먼저 끝난 것 → watcher 를 정리한다.
+  # 이미 죽었으면 sleep 을 마치고 kill 을 실행한 것 → 타임아웃(124)이다. 종료코드
+  # 추측(143) 대신 watcher 생존으로 판정해 다른 이유의 SIGTERM 을 오분류하지 않는다.
+  if kill -0 "$_watcher_pid" 2>/dev/null; then
+    kill -TERM "$_watcher_pid" 2>/dev/null
+    wait "$_watcher_pid" 2>/dev/null || true
+  else
+    _rc=124
+  fi
   return $_rc
 }
 
@@ -69,12 +74,13 @@ $_real"
   fi
 done
 
+i=0
 for REPO in "${REPOS[@]}"; do
 (
-  # 고정 prefix("repo_")로 시작 — REPO 가 "./foo" 면 SAFE_NAME 이 "._foo" 로 시작해
-  # dotfile 이 되고, 마지막 `cat "$WORKDIR"/*.txt` glob 이 dotfile 을 건너뛰어 출력이
-  # 통째로 누락된다. prefix 로 항상 일반 파일이 되게 한다.
-  SAFE_NAME=$(printf '%s' "$REPO" | tr '/ ' '__')
+  # 출력 파일명은 레포 경로가 아니라 루프 인덱스로 짓는다 — 경로를 tr '/ ' '__' 로
+  # 치환하면 서로 다른 경로('a/b'와 'a b')가 같은 이름으로 충돌해 한 레포 결과가
+  # 다른 레포에 덮어써진다. 인덱스는 항상 숫자라 충돌도 dotfile 문제도 없다.
+  SAFE_NAME=$i
   OUT="$WORKDIR/repo_$SAFE_NAME.txt"
 
   # Fetch (with timeout). 종료코드는 인라인 캡처 — set -e 부재로 실패해도 계속 진행.
@@ -91,7 +97,7 @@ for REPO in "${REPOS[@]}"; do
 
   # Behind/ahead
   BEHIND=$(git -C "$REPO" rev-list --count HEAD..@{upstream} 2>/dev/null || echo "-")
-  AHEAD=$(git -C "$REPO" rev-list --count @{upstream}..HEAD 2>/dev/null || echo "0")
+  AHEAD=$(git -C "$REPO" rev-list --count @{upstream}..HEAD 2>/dev/null || echo "-")
 
   # Unpushed commits (상세)
   UNPUSHED=""
@@ -141,9 +147,10 @@ for REPO in "${REPOS[@]}"; do
 
     # 중간 rebase 상태가 남아있으면 (= 충돌) abort하여 원상 복구
     REBASE_ABORTED=""
-    REBASE_MERGE_DIR=$(git -C "$REPO" rev-parse --git-path rebase-merge 2>/dev/null || echo "")
-    REBASE_APPLY_DIR=$(git -C "$REPO" rev-parse --git-path rebase-apply 2>/dev/null || echo "")
-    if [ "$PULL_EXIT" -ne 0 ] && { [ -d "$REBASE_MERGE_DIR" ] || [ -d "$REBASE_APPLY_DIR" ]; }; then
+    # --git-path 는 상대경로(.git/rebase-merge)를 반환하므로, 절대 git-dir 기준으로
+    # 체크해야 스크립트 cwd 가 아닌 레포 안의 rebase 진행 상태를 본다.
+    GIT_DIR_ABS=$(git -C "$REPO" rev-parse --absolute-git-dir 2>/dev/null || echo "")
+    if [ "$PULL_EXIT" -ne 0 ] && [ -n "$GIT_DIR_ABS" ] && { [ -d "$GIT_DIR_ABS/rebase-merge" ] || [ -d "$GIT_DIR_ABS/rebase-apply" ]; }; then
       git -C "$REPO" rebase --abort 2>/dev/null || true
       REBASE_ABORTED="yes"
     fi
@@ -159,10 +166,14 @@ for REPO in "${REPOS[@]}"; do
         git -C "$REPO" log --format="%h %s (%an · %cr)" "$BEFORE".."$UPSTREAM_SHA" 2>/dev/null || true
         echo "NEW_COMMITS_END"
         echo "DIFF_STAT_START"
-        git -C "$REPO" diff --stat "$BEFORE".."$UPSTREAM_SHA" 2>/dev/null || true
+        git -C "$REPO" diff --stat "$BEFORE"..."$UPSTREAM_SHA" 2>/dev/null || true
         echo "DIFF_STAT_END"
         echo "DIFF_START"
-        git -C "$REPO" diff --no-color "$BEFORE".."$UPSTREAM_SHA" 2>/dev/null | head -300 || true
+        # 3-dot(merge-base 기준)으로 incoming 변경만 표시 — 2-dot 은 로컬 전용 커밋을
+        # 삭제(deletion)로 뒤집어 보여준다. 300줄까지 출력하고 더 있으면 잘림 표시 후
+        # 즉시 종료(git 은 SIGPIPE)해 큰 diff 를 통째로 읽지 않는다.
+        git -C "$REPO" diff --no-color "$BEFORE"..."$UPSTREAM_SHA" 2>/dev/null \
+          | awk 'NR<=300; NR==301 { print "[... diff 가 길어 300줄에서 잘림 ...]"; exit }'
         echo "DIFF_END"
       elif [ -n "$REBASE_ABORTED" ]; then
         echo "REBASE_CONFLICT:yes"
@@ -204,6 +215,7 @@ for REPO in "${REPOS[@]}"; do
     fi
   fi
 ) &
+  i=$((i+1))
 done
 wait
 
