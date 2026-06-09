@@ -13,6 +13,11 @@ FETCH_TIMEOUT=30
 WORKDIR=$(mktemp -d "${TMPDIR:-/tmp}/pull-triage.XXXXXX") || { echo "error: mktemp -d 실패"; exit 1; }
 [ -n "$WORKDIR" ] && [ -d "$WORKDIR" ] || { echo "error: 임시 디렉토리 생성 실패"; exit 1; }
 
+# 인터럽트(Ctrl-C)나 비정상 종료에도 임시 디렉토리를 반드시 정리한다.
+# INT/TERM 은 exit 로 EXIT trap 을 거치게 해 한 곳에서만 정리한다.
+trap 'rm -rf "$WORKDIR"' EXIT
+trap 'exit 130' INT TERM
+
 # --- 환경 탐지: timeout 명령 (GNU coreutils) -------------------------------
 # Linux 는 보통 `timeout`, macOS(coreutils 설치 시)는 `gtimeout`. 둘 다 없으면
 # 순수 bash 폴백을 쓴다. bash 3.2(macOS 기본)에서도 동작하도록 연관배열 미사용.
@@ -165,9 +170,6 @@ for REPO in "${REPOS[@]}"; do
         echo "NEW_COMMITS_START"
         git -C "$REPO" log --format="%h %s (%an · %cr)" "$BEFORE".."$UPSTREAM_SHA" 2>/dev/null || true
         echo "NEW_COMMITS_END"
-        echo "DIFF_STAT_START"
-        git -C "$REPO" diff --stat "$BEFORE"..."$UPSTREAM_SHA" 2>/dev/null || true
-        echo "DIFF_STAT_END"
         echo "DIFF_START"
         # 3-dot(merge-base 기준)으로 incoming 변경만 표시 — 2-dot 은 로컬 전용 커밋을
         # 삭제(deletion)로 뒤집어 보여준다. 300줄까지 출력하고 더 있으면 잘림 표시 후
@@ -203,7 +205,16 @@ for REPO in "${REPOS[@]}"; do
     # 파일명은 `.txt` 가 아니어야 최종 `cat "$WORKDIR"/*.txt` glob 에 안 걸린다.
     SUB_TMP="$WORKDIR/sub_$SAFE_NAME"
     run_with_timeout "$((FETCH_TIMEOUT * 4))" git -C "$REPO" submodule foreach --quiet "$TPREFIX"'git fetch --all --quiet 2>/dev/null
-      UPDATES=$(git log --format="%h %s (%an · %cr)" HEAD..@{upstream} 2>/dev/null)
+      # submodule 은 보통 detached HEAD 라 @{upstream} 가 없다 — 그대로 비교하면 항상
+      # 빈 결과라 이 보고가 죽는다. 비교 기준 ref 를 단계적으로 찾는다:
+      # (1) 설정된 upstream → (2) .gitmodules 의 branch 로 origin/<branch> → (3) 원격 기본 origin/HEAD.
+      REF=$(git rev-parse --abbrev-ref --symbolic-full-name @{upstream} 2>/dev/null)
+      if [ -z "$REF" ]; then
+        SB=$(git config -f "$toplevel/.gitmodules" submodule."$name".branch 2>/dev/null)
+        if [ -n "$SB" ]; then REF="origin/$SB"; else REF=$(git rev-parse --abbrev-ref origin/HEAD 2>/dev/null); fi
+      fi
+      UPDATES=""
+      [ -n "$REF" ] && UPDATES=$(git log --format="%h %s (%an · %cr)" "HEAD..$REF" 2>/dev/null)
       if [ -n "$UPDATES" ]; then
         echo "SUBMODULE:$displaypath"
         echo "$UPDATES"
@@ -219,6 +230,5 @@ for REPO in "${REPOS[@]}"; do
 done
 wait
 
-# 결과 출력
+# 결과 출력 (임시 디렉토리 정리는 EXIT trap 이 수행)
 cat "$WORKDIR"/*.txt 2>/dev/null || true
-rm -rf "$WORKDIR"
