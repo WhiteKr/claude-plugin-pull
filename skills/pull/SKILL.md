@@ -52,10 +52,10 @@ Claude Code settings 파일에서 `additionalDirectories` 배열을 읽어 외�
 
 `triage.sh`에 레포 경로들을 인자로 전달한다 (경로에 공백이 있을 수 있으므로 각 경로를 반드시 따옴표로 감싼다). 이 스크립트는 모든 레포를 병렬로 fetch, 상태 확인, 그리고 OUTDATED 레포는 즉시 pull까지 수행한다.
 
-스크립트 경로는 설치 방식에 따라 다르다. 아래 형태로 호출하면 **플러그인 설치**(`${CLAUDE_PLUGIN_ROOT}` 설정됨)와 **개인 스킬 설치**(`~/.claude/skills/pull/`) 모두에서 동작한다:
+아래 경로는 스킬 호출 시 절대경로로 치환된다. 치환된 값을 그대로 쓴다:
 
 ```
-bash "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/skills/pull}/scripts/triage.sh" "<레포1>" "<레포2>" ...
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/triage.sh" "<레포1>" "<레포2>" ...
 ```
 
 스크립트는 Linux / macOS / WSL 에서 동작한다 (`timeout`/`gtimeout` 부재 시 순수 bash 폴백, `realpath` 부재 시 `cd && pwd -P` 폴백, bash 3.2 호환).
@@ -76,4 +76,4 @@ OUTDATED 레포의 pull 결과는 출력에 다음 키로 포함된다:
 
 ## 결과 보고
 
-모든 레포 처리 후, **출력 형식은 `references/output-format.md` 를 읽고 그 형식대로 작성한다** — 요약 테이블 + 상세 섹션(pulled / uncommitted / unpushed / error / timeout) + submodule 섹션. triage.sh 가 내보내는 키(`STATE` / `UPDATED` / `REBASE_CONFLICT` / `NEW_COMMITS_*` / `STATUS_*` / `UNPUSHED_*` / `SUBMODULE_*`)를 그 문서의 매핑과 열 규칙(상대시각 한국어 변환, 서술에서 파일명 제외 등)에 따라 변환한다.
+모든 레포 처리 후, **출력 형식은 `${CLAUDE_SKILL_DIR}/references/output-format.md` 를 읽고 그 형식대로 작성한다** — 요약 테이블 + 상세 섹션(pulled / uncommitted / unpushed / error / timeout) + submodule 섹션. triage.sh 가 내보내는 키(`STATE` / `UPDATED` / `REBASE_CONFLICT` / `NEW_COMMITS_*` / `STATUS_*` / `UNPUSHED_*` / `SUBMODULE_*`)를 그 문서의 매핑과 열 규칙(상대시각 한국어 변환, 서술에서 파일명 제외 등)에 따라 변환한다.
