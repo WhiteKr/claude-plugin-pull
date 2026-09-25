@@ -1,6 +1,6 @@
 # pull -- 결과 보고 형식
 
-`/pull` 스킬(`skills/pull/SKILL.md`)의 절차 2 이후, triage.sh 출력을 사용자에게 보여줄 최종 형식을 정의한다. 절차 진행 중간 보고 없이 이 형식만 최종 출력한다.
+`/pull` 스킬(`skills/pull/SKILL.md`)의 절차 2 이후, triage.sh 출력을 사용자에게 보여줄 최종 형식을 정의한다.
 
 모든 레포 처리 후 아래 형식으로 요약:
 
