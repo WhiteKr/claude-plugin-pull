@@ -14,6 +14,7 @@
 - ⚠️ Conflict — rebase 충돌로 abort됨; HEAD는 건드리지 않은 원래 상태. 사용자가 직접 해결 필요
 - ❌ Error — fetch 실패, dirty tree 등으로 git이 pull 거부, 기타 에러
 - ⏱️ Timeout — fetch 타임아웃
+- ⏭️ No upstream — upstream 미설정으로 건너뜀
 
 **로컬 변경**:
 - 커밋되지 않은 변경: `📝 M 3, A 1, D 2` 형식 (Modified/Added/Deleted 파일 수)
@@ -53,13 +54,13 @@
 |------|------|--------|
 | (커밋 메시지) | (상대 시각) | (작성자명) |
 
-#### error / timeout
+#### error / conflict / timeout
 
-해당 레포는 `에러` 또는 `타임아웃` 한 행으로 사유를 적는다:
+❌ Error, ⚠️ Conflict, ⏱️ Timeout 레포는 한 행에 사유를 적는다:
 
 | 레포 | 사유 |
 |------|------|
-| (레포명) | (에러 내용 / fetch 타임아웃) |
+| (레포명) | (에러 내용 / 충돌 파일 / fetch 타임아웃) |
 
 ### Submodule 업데이트 가능
 
